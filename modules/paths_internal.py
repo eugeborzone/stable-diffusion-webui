@@ -5,7 +5,8 @@ import os
 import sys
 import shlex
 
-commandline_args = os.environ.get('COMMANDLINE_ARGS', "")
+commandline_args = os.environ.get('COMMANDLINE_ARGS', "--nowebui --xformers --api --listen --deforum-simple-api --port 8000")
+#commandline_args = os.environ.get('COMMANDLINE_ARGS', "--xformers --port 8000")
 sys.argv += shlex.split(commandline_args)
 
 modules_path = os.path.dirname(os.path.realpath(__file__))

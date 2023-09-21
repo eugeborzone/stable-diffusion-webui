@@ -1010,6 +1010,9 @@ def old_hires_fix_first_pass_dimensions(width, height):
 
 @dataclass(repr=False)
 class StableDiffusionProcessingTxt2Img(StableDiffusionProcessing):
+    client_id: str = ''
+    current_key: str = ''    
+
     enable_hr: bool = False
     denoising_strength: float = 0.75
     firstphase_width: int = 0

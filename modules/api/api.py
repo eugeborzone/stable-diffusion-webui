@@ -34,6 +34,9 @@ import piexif
 import piexif.helper
 from contextlib import closing
 
+from moviepy.editor import VideoFileClip, AudioFileClip, concatenate_videoclips
+import shutil
+
 import json
 import boto3
 def s3_upload_opt(local_path, client_id, bucket_name="zing-zang-vc", s3_folder='outputs'):
@@ -248,6 +251,7 @@ class Api:
         self.queue_lock = queue_lock
         api_middleware(self.app)
         self.add_api_route("/sdapi/v1/txt2img", self.text2imgapi, methods=["POST"], response_model=models.TextToImageResponse)
+        self.add_api_route("/sdapi/v1/video-music", self.video_music, methods=["POST"])
         # self.add_api_route("/sdapi/v1/img2img", self.img2imgapi, methods=["POST"], response_model=models.ImageToImageResponse)
         # self.add_api_route("/sdapi/v1/extra-single-image", self.extras_single_image_api, methods=["POST"], response_model=models.ExtrasSingleImageResponse)
         # self.add_api_route("/sdapi/v1/extra-batch-images", self.extras_batch_images_api, methods=["POST"], response_model=models.ExtrasBatchImagesResponse)
@@ -447,6 +451,55 @@ class Api:
         os.remove(outdir)
         #return models.TextToImageResponse(images=b64images, parameters=vars(txt2imgreq), info=processed.js())
         return models.TextToImageResponse(images=[s3_key], parameters=vars(txt2imgreq), info=processed.js())
+
+    
+    def video_music(self, video_path:str, song_path:str, client_id:str, current_key:str):
+        
+        response = key_petition(client_id, current_key)
+        if isinstance(response, str):
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    detail='Bad key or client_id'
+                )
+        
+        # download video and image from s3
+        s3 = boto3.resource('s3')
+        bucket = s3.Bucket('zing-zang-vc')
+        # check if client_id folder exists
+        if not os.path.exists(f'/home/ubuntu/stable-diffusion-webui/tmp/{client_id}'):
+            os.mkdir(f'/home/ubuntu/stable-diffusion-webui/tmp/{client_id}')
+        bucket.download_file(video_path, f'/home/ubuntu/stable-diffusion-webui/tmp/{client_id}/video.mp4')
+        bucket.download_file(song_path, f'/home/ubuntu/stable-diffusion-webui/tmp/{client_id}/song.mp3')
+
+        # Carga el video y el archivo de audio
+        video = VideoFileClip(f"/home/ubuntu/stable-diffusion-webui/tmp/{client_id}/video.mp4")
+        audio = AudioFileClip(f"/home/ubuntu/stable-diffusion-webui/tmp/{client_id}/song.mp3")
+
+        # Calcula cuántas veces se debe repetir el video
+        repeticiones = int(audio.duration / video.duration)
+
+        # Crea una lista de clips de video para el bucle
+        video_clips = [video] * repeticiones
+
+        # Combina los clips de video en un solo video
+        video_bucle = concatenate_videoclips(video_clips, method="compose")
+
+        # Ajusta la duración del video al audio
+        video_bucle = video_bucle.set_duration(audio.duration)
+
+        # Añade el audio al video
+        video_bucle = video_bucle.set_audio(audio)
+
+        # Guarda el video resultante
+        video_bucle.write_videofile(f"/home/ubuntu/stable-diffusion-webui/tmp/{client_id}/TicTock_video{client_id}.mp4", codec="libx264", audio_codec="aac")
+
+        # save to s3
+        s3_key = s3_upload_opt(f"/home/ubuntu/stable-diffusion-webui/tmp/{client_id}/TicTock_video{client_id}.mp4", client_id, s3_folder='outputs')
+        # remove client temp folder shutil
+        shutil.rmtree(f'/home/ubuntu/stable-diffusion-webui/tmp/{client_id}')
+
+        return {'s3_key': s3_key}
+
 
     def img2imgapi(self, img2imgreq: models.StableDiffusionImg2ImgProcessingAPI):
         init_images = img2imgreq.init_images

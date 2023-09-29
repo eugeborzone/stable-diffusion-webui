@@ -476,7 +476,7 @@ class Api:
         audio = AudioFileClip(f"/home/ubuntu/stable-diffusion-webui/tmp/{client_id}/song.mp3")
 
         # Calcula cuántas veces se debe repetir el video
-        repeticiones = int(audio.duration / video.duration)
+        repeticiones = max(1,int(audio.duration / video.duration))
 
         # Crea una lista de clips de video para el bucle
         video_clips = [video] * repeticiones
